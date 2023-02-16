@@ -73,19 +73,19 @@ const Home: NextPage<InferGetStaticPropsType<typeof getStaticProps>> = ({
 
           <div className="mt-8 flex flex-col items-center">
             <div className="select-none rounded-sm border-2 p-4 text-center hover:cursor-pointer hover:bg-[#2a2929]">
-              <h2 className="text-5xl font-thin">
+              <h2 className="text-5xl font-extrabold">
                 ${computeAveragePrice(listings).toFixed(2)}
               </h2>
               <h3 className="tracking-tightest mt-2 text-2xl">
                 {computeAverageChange(listings)?.change > 0 ? (
                   <span className="text-green-500">
-                    ▲ ${computeAverageChange(listings)?.change.toFixed(2)} (
+                    ▲ {computeAverageChange(listings)?.change.toFixed(2)} (
                     {computeAverageChange(listings)?.percentChange.toFixed(2)}
                     %)
                   </span>
                 ) : (
                   <span className="text-red-500">
-                    ▼ $
+                    ▼{" "}
                     {Math.abs(computeAverageChange(listings)?.change).toFixed(
                       2
                     )}{" "}

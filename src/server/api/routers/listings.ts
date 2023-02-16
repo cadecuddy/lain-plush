@@ -4,8 +4,12 @@ import { createTRPCRouter, publicProcedure } from "../trpc";
 
 export const listingsRouter = createTRPCRouter({
   getListings: publicProcedure.query(async () => {
-    const listings = await prisma.lainPlush.findMany();
-    // TODO: add time updated at
-    return listings;
+    const listings = await prisma.lainPlush.findMany({
+      orderBy: {
+        endTime: "desc",
+      },
+    });
+
+    return { listings, time: new Date().toJSON() };
   }),
 });

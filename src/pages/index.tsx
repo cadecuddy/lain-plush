@@ -16,7 +16,9 @@ const Home: NextPage<InferGetStaticPropsType<typeof getStaticProps>> = ({
   const { listings, time } = data;
 
   const computeAveragePrice = (data: LainPlush[]) => {
-    const prices = data.map((listing) => listing.currentPrice);
+    const prices = data
+      .filter((listing) => !listing.active)
+      .map((listing) => listing.currentPrice);
     const sum = prices.reduce((a, b) => a + b, 0);
     const avg = sum / prices.length || 0;
     return avg;
@@ -26,7 +28,10 @@ const Home: NextPage<InferGetStaticPropsType<typeof getStaticProps>> = ({
     let change = 0;
     let percentChange = 0;
 
-    const prices = data.map((listing) => listing.currentPrice);
+    // prices of non active listings
+    const prices = data
+      .filter((listing) => !listing.active)
+      .map((listing) => listing.currentPrice);
     const sum = prices.reduce((a, b) => a + b, 0);
     const avg = sum / prices.length || 0;
 
@@ -35,7 +40,6 @@ const Home: NextPage<InferGetStaticPropsType<typeof getStaticProps>> = ({
       change = avg - avgWithoutMostRecent;
       percentChange = (change / avg) * 100;
     }
-    console.log(change, percentChange);
 
     if (!change || !percentChange)
       return {

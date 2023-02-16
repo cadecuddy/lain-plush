@@ -11,7 +11,7 @@ type Props = {
 
 export default function TabArea({ listings, selected, setSelected }: Props) {
   return (
-    <div className="mb-8 w-full p-4 md:w-1/2">
+    <div className="mb-8 mr-8 w-full p-4 md:w-1/2">
       <div className="my-12 mx-auto flex justify-center gap-8 text-2xl md:text-3xl lg:text-4xl">
         <h2
           className="pb-1 hover:cursor-pointer hover:bg-neutral-300 hover:text-background"
@@ -51,7 +51,7 @@ export default function TabArea({ listings, selected, setSelected }: Props) {
           )}
 
         {selected === "listings" && listings && (
-          <div className="mx-auto flex flex-col gap-4 p-4">
+          <div className="flex flex-col items-center gap-8">
             {listings
               .filter((listing: LainPlush) => listing.active)
               .map((listing, idx) => (

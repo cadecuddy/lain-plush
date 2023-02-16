@@ -26,6 +26,10 @@ const config = {
         protocol: 'https',
         hostname: '**.ebayimg.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'lain-plush.s3.amazonaws.com',
+      },
     ],
   },
 };

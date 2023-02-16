@@ -3,5 +3,5 @@
 @tailwind utilities;
 
 body {
-  @apply bg-[#1A1A1A] font-mono;
+  @apply bg-background bg-opacity-10 bg-[url(../../public/background.gif)] bg-repeat font-mono;
 }

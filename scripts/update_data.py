@@ -1,23 +1,32 @@
 import datetime
 import os
-import time
-import pandas as pd
 from ebaysdk.finding import Connection as Finding
 from ebaysdk.exception import ConnectionError
 import dotenv
 import calendar
-import sqlite3
 import boto3
 import requests
+import MySQLdb
 
 APPLICATION_ID = dotenv.get_key(dotenv_path='.env', key_to_get='EBAY_APP_ID')
 PAYLOAD = {
     'keywords': 'serial experiments lain plush',
 }
-DB_PATH = dotenv.get_key(dotenv_path='.env', key_to_get='DB_CONNECTION_STRING')
+AWS_BUCKET = dotenv.get_key(dotenv_path='.env', key_to_get='AWS_BUCKET_NAME')
 
 
-def get_active_plushes(payload=PAYLOAD):
+connection = MySQLdb.connect(
+  host= dotenv.get_key(dotenv_path='.env', key_to_get="HOST"),
+  user=dotenv.get_key(dotenv_path='.env', key_to_get="USERNAME"),
+  passwd=dotenv.get_key(dotenv_path='.env', key_to_get="PASSWORD"),
+  db=dotenv.get_key(dotenv_path='.env', key_to_get="DATABASE"),
+  ssl_mode = "VERIFY_IDENTITY",
+  ssl      = {
+    "ca": dotenv.get_key(dotenv_path='.env', key_to_get="SSL_CERT"),
+  }
+)
+
+def get_active_plushes(payload):
     '''
     Queries the ebay Finding API for any active lain plush
     listings. Note that the response can contain false positives,
@@ -32,7 +41,7 @@ def get_active_plushes(payload=PAYLOAD):
         print(e.response.dict())
 
 
-def update_data(db_path):
+def update_data():
     '''
     Parse the active listings. Add any new active listings
     to the database. Update any existing listings in case of
@@ -40,8 +49,7 @@ def update_data(db_path):
     '''
 
     new_listings = 0
-    con = sqlite3.connect(db_path)
-    response = get_active_plushes()
+    response = get_active_plushes(PAYLOAD)
 
     for item in response.reply.searchResult.item:
         if 'plush' not in item.title.lower():
@@ -56,83 +64,76 @@ def update_data(db_path):
             'url': getattr(item, 'viewItemURL'),
             'image': getattr(item, 'galleryURL')
         }
+        try:
         # Add entry
-        if con.execute(f'SELECT * FROM LainPlush WHERE id = {item.itemId}').fetchone() is None:
-            print(f' [+] Adding {item.title} to db')
-            
-            # download ebay thumbnail
-            img = requests.get(LainPlush['image']).content
-            with open(f'{item.itemId}.jpg', 'wb') as f:
-                f.write(img)
+            cursor = connection.cursor()
+            cursor.execute(f'SELECT * FROM LainPlush WHERE id = {item.itemId}')
+            if cursor.fetchone() is None:
+                print(f' [+] Adding {item.title} to db')
+                
+                # download ebay thumbnail
+                img = requests.get(LainPlush['image']).content
+                with open(f'{item.itemId}.jpg', 'wb') as f:
+                    f.write(img)
 
-            # upload to s3 using boto3 with credentials in .env
-            boto = boto3.Session(
-                aws_access_key_id=dotenv.get_key(dotenv_path='.env', key_to_get='AWS_ACCESS_KEY_ID'),
-                aws_secret_access_key=dotenv.get_key(dotenv_path='.env', key_to_get='AWS_SECRET_ACCESS_KEY'),
-            )
-            s3 = boto.resource('s3')
-            bucket = s3.Bucket('lain-plush')
-            bucket.upload_file(f'{item.itemId}.jpg', f'{item.itemId}.jpg', ExtraArgs={ "ContentType": "image/jpeg"})
-            print(f' [+] Uploaded {item.itemId}.jpg to s3')
+                # upload to s3 using boto3 with credentials in .env
+                boto = boto3.Session(
+                    aws_access_key_id=dotenv.get_key(dotenv_path='.env', key_to_get='AWS_ACCESS_KEY_ID'),
+                    aws_secret_access_key=dotenv.get_key(dotenv_path='.env', key_to_get='AWS_SECRET_ACCESS_KEY'),
+                )
+                s3 = boto.resource('s3')
+                bucket = s3.Bucket(AWS_BUCKET)
+                bucket.upload_file(f'{item.itemId}.jpg', f'{item.itemId}.jpg', ExtraArgs={ "ContentType": "image/jpeg"})
+                print(f' [+] Uploaded {item.itemId}.jpg to s3')
 
-            # get s3 url
-            LainPlush['image'] = f'https://lain-plush.s3.amazonaws.com/{item.itemId}.jpg'
+                # add s3 url as image url for listing
+                LainPlush['image'] = f'https://lain-plush.s3.amazonaws.com/{item.itemId}.jpg'
 
-            # add to db
-            con.execute(f'INSERT INTO LainPlush VALUES ({LainPlush["id"]}, {LainPlush["active"]}, "{LainPlush["title"]}", {LainPlush["endTime"]}, {LainPlush["watchCount"]}, {LainPlush["currentPrice"]}, "{LainPlush["url"]}", "{LainPlush["image"]}")')
-            sql = '''
-            INSERT OR IGNORE INTO LainPlush VALUES (
-                :id,
-                :active,
-                :title,
-                :endTime,
-                :watchCount,
-                :currentPrice,
-                :url,
-                :image
-            )
-            '''
-            cur = con.cursor()
-            cur.execute(sql, LainPlush)
+                # add to db
+                cursor.execute(f'INSERT INTO LainPlush VALUES ({LainPlush["id"]}, {LainPlush["active"]}, "{LainPlush["title"]}", {LainPlush["endTime"]}, {LainPlush["watchCount"]}, {LainPlush["currentPrice"]}, "{LainPlush["url"]}", "{LainPlush["image"]}")')
 
-            # delete local file
-            os.remove(f'{item.itemId}.jpg')
-            new_listings += 1
-
-        # Update entry if price changed
-        else:
-            # check if price changed
-            current_price = con.execute(f'SELECT currentPrice FROM LainPlush WHERE id = {item.itemId}').fetchone()[0]
-            if current_price != LainPlush['currentPrice']:
-                print(f' [-] Price changed for {item.title} from {current_price} to {LainPlush["currentPrice"]}')
-                # update db
-                con.execute(f'UPDATE LainPlush SET currentPrice = {LainPlush["currentPrice"]} WHERE id = {item.itemId}')
-
-    con.commit()
+                # delete local file
+                os.remove(f'{item.itemId}.jpg')
+                new_listings += 1
+            # Update entry if price changed
+            else:
+                # check if price changed
+                cursor.execute(f'SELECT currentPrice FROM LainPlush WHERE id = {item.itemId}')
+                current_price = cursor.fetchone()[0]
+                if current_price != float(LainPlush['currentPrice']):
+                    print(f' [-] Price changed for {item.title} from {current_price} to {LainPlush["currentPrice"]}')
+                    # update db
+                    cursor.execute(f'UPDATE LainPlush SET currentPrice = {LainPlush["currentPrice"]} WHERE id = {item.itemId}')
+        except Exception as e:
+            print(f' [!] Error: {e}')
+            continue
+    connection.commit()
+    print(f' [+] Added {new_listings} new listings') if new_listings > 0 else print(' [+] No new listings')
 
 
-def check_expired(db_path):
+def check_expired():
     '''
     Checks if any listings have expired and marks
     them as inactive.
     '''
-    con = sqlite3.connect(db_path)
-    # Check if any listings have expired
-    for row in con.execute('SELECT * FROM LainPlush'):
-        if row[3] < calendar.timegm(datetime.datetime.utcnow().timetuple()):
-            print(f' [-] Listing {row[2]} has expired')
-            con.execute(f'UPDATE LainPlush SET active = False WHERE id = {row[0]}')
+    # Get all active listings
+    cursor = connection.cursor()
+    cursor.execute('SELECT * FROM LainPlush WHERE active = True')
+    active_listings = cursor.fetchall()
+    print(f' [+] Checking {len(active_listings)} active listings')
 
-    con.commit()
+    # Check if any active listings have expired
+    for row in active_listings:
+        if row[3] < calendar.timegm(datetime.datetime.utcnow().timetuple()):
+            print(f' [-] Listing {row[2]} has ended')
+            cursor.execute(f'UPDATE LainPlush SET active = False WHERE id = {row[0]}')
+            edited_listings += 1
+    connection.commit()
+    print(f' [+] Updated {edited_listings} listings') if edited_listings > 0 else print(' [+] No active listings have ended')
 
 
 if __name__ == '__main__':
-    # update every 15 minutes
-    while True:
-        print('Updating data at ', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-        try:
-            update_data(DB_PATH)
-            check_expired(DB_PATH)
-        except Exception as e:
-            print(e)
-        time.sleep(900)
+    print('Updating data at ', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    update_data()
+    print('Checking for expired listings at ', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    check_expired()

@@ -26,6 +26,15 @@ export default function ListingCard(listing: LainPlush) {
           <h2 className="inline-block px-1 text-base text-green-700 hover:bg-green-700 hover:text-background">
             Sold {new Date(listing.endTime * 1000).toLocaleDateString()}
           </h2>
+          {listing.endTime < Date.now() / 1000 ? (
+            <h2 className="inline-block px-1 text-sm text-green-700 hover:bg-green-700 hover:text-background md:text-lg">
+              Sold {new Date(listing.endTime * 1000).toLocaleDateString()}
+            </h2>
+          ) : (
+            <h2 className="inline-block px-1 text-base text-red-700 hover:bg-red-700 hover:text-background">
+              Ends {new Date(listing.endTime * 1000).toLocaleDateString()}
+            </h2>
+          )}
           <br />
           <h2 className="inline-block px-1 text-2xl font-bold hover:cursor-pointer hover:bg-neutral-300 hover:text-background">
             ${listing.currentPrice.toFixed(2)}

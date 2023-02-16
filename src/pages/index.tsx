@@ -7,17 +7,43 @@ import { useState } from "react";
 import { createProxySSGHelpers } from "@trpc/react-query/ssg";
 import { listingsRouter } from "../server/api/routers/listings";
 import { prisma } from "../server/db";
+import TabArea from "../components/TabArea";
 
 const Home: NextPage<InferGetStaticPropsType<typeof getStaticProps>> = ({
   data,
 }) => {
   const [selected, setSelected] = useState<string>("listings");
+  const { listings, time } = data;
 
   const computeAveragePrice = (data: LainPlush[]) => {
     const prices = data.map((listing) => listing.currentPrice);
     const sum = prices.reduce((a, b) => a + b, 0);
     const avg = sum / prices.length || 0;
     return avg;
+  };
+
+  const computeAverageChange = (data: LainPlush[]) => {
+    let change = 0;
+    let percentChange = 0;
+
+    const prices = data.map((listing) => listing.currentPrice);
+    const sum = prices.reduce((a, b) => a + b, 0);
+    const avg = sum / prices.length || 0;
+
+    if (prices.length >= 1 && prices[0]) {
+      const avgWithoutMostRecent = (sum - prices[0]) / (prices.length - 1) || 0;
+      change = avg - avgWithoutMostRecent;
+      percentChange = (change / avg) * 100;
+    }
+    console.log(change, percentChange);
+
+    if (!change || !percentChange)
+      return {
+        change: 0,
+        percentChange: 0,
+      };
+
+    return { change, percentChange };
   };
 
   return (
@@ -35,9 +61,9 @@ const Home: NextPage<InferGetStaticPropsType<typeof getStaticProps>> = ({
         <div className="w-full p-4 md:w-1/2">
           <h1 className="mt-12 text-center text-5xl">LAIN PLUSH</h1>
 
-          <div className="pointer-events-none mt-8 flex flex-col items-center justify-center">
+          <div className="mt-8 flex flex-col items-center justify-center">
             <Image
-              className="h-[300px] w-[200px]"
+              className="h-[300px] w-[200px] hover:animate-spin hover:cursor-pointer"
               src="/plush.png"
               alt="lain plush"
               width={200}
@@ -46,74 +72,53 @@ const Home: NextPage<InferGetStaticPropsType<typeof getStaticProps>> = ({
           </div>
 
           <div className="mt-8 flex flex-col items-center">
-            <div className="select-none rounded-md border-2 p-4 text-center hover:cursor-pointer hover:bg-[#2a2929]">
+            <div className="select-none rounded-sm border-2 p-4 text-center hover:cursor-pointer hover:bg-[#2a2929]">
               <h2 className="text-5xl font-thin">
-                ${computeAveragePrice(data)}
+                ${computeAveragePrice(listings).toFixed(2)}
               </h2>
-              <h3 className="tracking-tightest mt-2 text-2xl text-green-700">
-                ▲ $23 (18%)
+              <h3 className="tracking-tightest mt-2 text-2xl">
+                {computeAverageChange(listings)?.change > 0 ? (
+                  <span className="text-green-500">
+                    ▲ ${computeAverageChange(listings)?.change.toFixed(2)} (
+                    {computeAverageChange(listings)?.percentChange.toFixed(2)}
+                    %)
+                  </span>
+                ) : (
+                  <span className="text-red-500">
+                    ▼ $
+                    {Math.abs(computeAverageChange(listings)?.change).toFixed(
+                      2
+                    )}{" "}
+                    (
+                    {Math.abs(
+                      computeAverageChange(listings)?.percentChange
+                    ).toFixed(2)}
+                    %)
+                  </span>
+                )}
               </h3>
             </div>
           </div>
 
           <div className="mt-4 text-center text-neutral-500">
-            last updated: 1 minute ago
+            last updated: {new Date(time).toLocaleString()}
           </div>
         </div>
 
-        <div className="w-full p-4 md:w-1/2">
-          <div className="items my-12 flex justify-center gap-8 text-4xl">
-            <h2
-              className="pb-1 hover:cursor-pointer hover:bg-neutral-300 hover:text-[#1A1A1A]"
-              onClick={() => setSelected("listings")}
-            >
-              [listings]
-            </h2>
-            <h2
-              className="pb-1 hover:cursor-pointer hover:bg-neutral-300 hover:text-[#1A1A1A]"
-              onClick={() => setSelected("sold")}
-            >
-              [sold]
-            </h2>
-          </div>
-
-          {selected === "sold" && data && (
-            <div className="mx-auto flex flex-col gap-4">
-              {data.map((listing: LainPlush, idx) => (
-                <div key={idx}>
-                  <ListingCard {...listing} />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <TabArea
+          listings={listings}
+          selected={selected}
+          setSelected={setSelected}
+        />
       </main>
     </>
   );
 };
 
-const ListingCard = (listing: LainPlush) => {
-  return (
-    <div className="flex flex-col gap-2 align-middle">
-      <div className="flex items-center justify-evenly">
-        <Image
-          src={listing.image}
-          alt={listing.title}
-          width={100}
-          height={100}
-          className="h-[150px] w-[100px]"
-        />
-        <h2 className="ml-4 text-left text-lg font-thin">
-          {listing.title.length > 40
-            ? listing.title.slice(0, 40) + "..."
-            : listing.title}
-        </h2>
-        <h2>${listing.currentPrice}</h2>
-      </div>
-    </div>
-  );
-};
-
+// Get all the latest listings from the database
+// and pass them to the page as props.
+//
+// This will be revalidated every 15 minutes.
 export async function getStaticProps() {
   const ssg = createProxySSGHelpers({
     router: listingsRouter,
@@ -123,13 +128,12 @@ export async function getStaticProps() {
   });
 
   const data = await ssg.getListings.fetch();
-  const FIVE_MINUTES = 10 * 60;
 
   return {
     props: {
       data,
     },
-    revalidate: FIVE_MINUTES,
+    revalidate: 15 * 60,
   };
 }
 

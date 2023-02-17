@@ -1,6 +1,5 @@
 import type { LainPlush } from ".prisma/client";
 import React from "react";
-import Graph from "./Graph";
 import ListingCard from "./ListingCard";
 
 type Props = {
@@ -12,7 +11,7 @@ type Props = {
 export default function TabArea({ listings, selected, setSelected }: Props) {
   return (
     <div className="mb-8 mr-8 w-full p-4 md:w-1/2">
-      <div className="my-12 mx-auto flex justify-center gap-8 text-2xl md:text-3xl lg:text-4xl">
+      <div className="my-12 mx-auto flex justify-center gap-8 text-2xl md:text-3xl lg:text-4xl xl:text-5xl">
         <h2
           className="pb-1 hover:cursor-pointer hover:bg-neutral-300 hover:text-background"
           onClick={() => setSelected("listings")}
@@ -29,17 +28,17 @@ export default function TabArea({ listings, selected, setSelected }: Props) {
         >
           [<span className={selected === "sold" ? "underline" : ""}>sold</span>]
         </h2>
-        <h2
+        {/* <h2
           className="pb-1 hover:cursor-pointer hover:bg-neutral-300 hover:text-background"
           onClick={() => setSelected("graph")}
         >
           [
           <span className={selected === "graph" ? "underline" : ""}>graph</span>
           ]
-        </h2>
+        </h2> */}
       </div>
 
-      <div className="overflow-y-hidden">
+      <div>
         {selected === "listings" &&
           listings.filter((listing: LainPlush) => listing.active).length ===
             0 && (
@@ -51,7 +50,7 @@ export default function TabArea({ listings, selected, setSelected }: Props) {
           )}
 
         {selected === "listings" && listings && (
-          <div className="flex flex-col items-center gap-8">
+          <div className="scrollbar-hide flex flex-col items-center gap-8">
             {listings
               .filter((listing: LainPlush) => listing.active)
               .map((listing, idx) => (
@@ -63,7 +62,7 @@ export default function TabArea({ listings, selected, setSelected }: Props) {
         )}
 
         {selected === "sold" && listings && (
-          <div className="flex flex-col items-center gap-8">
+          <div className="scrollbar-hide flex flex-col items-center gap-8">
             {listings
               .filter((listing: LainPlush) => !listing.active)
               .map((listing, idx) => (
@@ -74,7 +73,7 @@ export default function TabArea({ listings, selected, setSelected }: Props) {
           </div>
         )}
 
-        {selected === "graph" && listings && <Graph />}
+        {/* {selected === "graph" && listings && <Graph />} */}
       </div>
     </div>
   );

@@ -87,7 +87,7 @@ def update_data():
                 print(f' [+] Uploaded {item.itemId}.jpg to s3')
 
                 # add s3 url as image url for listing
-                LainPlush['image'] = f'https://lain-plush.s3.amazonaws.com/{item.itemId}.jpg'
+                LainPlush['image'] = f'https://{AWS_BUCKET}.s3.amazonaws.com/{item.itemId}.jpg'
 
                 # add to db
                 cursor.execute(f'INSERT INTO LainPlush VALUES ({LainPlush["id"]}, {LainPlush["active"]}, "{LainPlush["title"]}", {LainPlush["endTime"]}, {LainPlush["watchCount"]}, {LainPlush["currentPrice"]}, "{LainPlush["url"]}", "{LainPlush["image"]}")')
@@ -116,6 +116,7 @@ def check_expired():
     Checks if any listings have expired and marks
     them as inactive.
     '''
+    edited_listings = 0
     # Get all active listings
     cursor = connection.cursor()
     cursor.execute('SELECT * FROM LainPlush WHERE active = True')
@@ -124,6 +125,7 @@ def check_expired():
 
     # Check if any active listings have expired
     for row in active_listings:
+        # See if listing's end time has already passed
         if row[3] < calendar.timegm(datetime.datetime.utcnow().timetuple()):
             print(f' [-] Listing {row[2]} has ended')
             cursor.execute(f'UPDATE LainPlush SET active = False WHERE id = {row[0]}')
@@ -133,7 +135,7 @@ def check_expired():
 
 
 if __name__ == '__main__':
-    print('Updating data at ', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    print('Updating data at', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     update_data()
-    print('Checking for expired listings at ', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    print('Checking for expired listings at', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     check_expired()

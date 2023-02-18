@@ -1,44 +1,34 @@
 import datetime
+import json
 import os
 from ebaysdk.finding import Connection as Finding
 from ebaysdk.exception import ConnectionError
-import dotenv
+from dotenv import load_dotenv
 import calendar
 import boto3
 import requests
 import MySQLdb
 
-APPLICATION_ID = dotenv.get_key(dotenv_path='.env', key_to_get='EBAY_APP_ID')
+# load environment variables
+load_dotenv()
+
+APPLICATION_ID = os.getenv('EBAY_APP_ID')
 PAYLOAD = {
     'keywords': 'serial experiments lain plush',
 }
-AWS_BUCKET = dotenv.get_key(dotenv_path='.env', key_to_get='AWS_BUCKET_NAME')
+AWS_BUCKET = os.getenv('AWS_BUCKET_NAME')
 
 
 connection = MySQLdb.connect(
-  host= dotenv.get_key(dotenv_path='.env', key_to_get="HOST"),
-  user=dotenv.get_key(dotenv_path='.env', key_to_get="USERNAME"),
-  passwd=dotenv.get_key(dotenv_path='.env', key_to_get="PASSWORD"),
-  db=dotenv.get_key(dotenv_path='.env', key_to_get="DATABASE"),
+  host= os.getenv('HOST'),
+  user= os.getenv('USERNAME'),
+  passwd= os.getenv('PASSWORD'),
+  db=os.getenv('DATABASE'),
   ssl_mode = "VERIFY_IDENTITY",
   ssl      = {
-    "ca": dotenv.get_key(dotenv_path='.env', key_to_get="SSL_CERT"),
+    "ca": os.getenv('SSL_CERT'),
   }
 )
-
-def get_active_plushes(payload):
-    '''
-    Queries the ebay Finding API for any active lain plush
-    listings. Note that the response can contain false positives,
-    which are handled in update_data.
-    '''
-    try:
-        api = Finding(appid=APPLICATION_ID, config_file=None)
-        response = api.execute('findItemsAdvanced', payload)
-        return response
-    except ConnectionError as e:
-        print(e)
-        print(e.response.dict())
 
 
 def update_data():
@@ -65,7 +55,7 @@ def update_data():
             'image': getattr(item, 'galleryURL')
         }
         try:
-        # Add entry
+        # Add new entry
             cursor = connection.cursor()
             cursor.execute(f'SELECT * FROM LainPlush WHERE id = {item.itemId}')
             if cursor.fetchone() is None:
@@ -78,8 +68,8 @@ def update_data():
 
                 # upload to s3 using boto3 with credentials in .env
                 boto = boto3.Session(
-                    aws_access_key_id=dotenv.get_key(dotenv_path='.env', key_to_get='AWS_ACCESS_KEY_ID'),
-                    aws_secret_access_key=dotenv.get_key(dotenv_path='.env', key_to_get='AWS_SECRET_ACCESS_KEY'),
+                    aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
+                    aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
                 )
                 s3 = boto.resource('s3')
                 bucket = s3.Bucket(AWS_BUCKET)
@@ -89,10 +79,8 @@ def update_data():
                 # add s3 url as image url for listing
                 LainPlush['image'] = f'https://{AWS_BUCKET}.s3.amazonaws.com/{item.itemId}.jpg'
 
-                # add to db
                 cursor.execute(f'INSERT INTO LainPlush VALUES ({LainPlush["id"]}, {LainPlush["active"]}, "{LainPlush["title"]}", {LainPlush["endTime"]}, {LainPlush["watchCount"]}, {LainPlush["currentPrice"]}, "{LainPlush["url"]}", "{LainPlush["image"]}")')
 
-                # delete local file
                 os.remove(f'{item.itemId}.jpg')
                 new_listings += 1
             # Update entry if price changed
@@ -102,7 +90,6 @@ def update_data():
                 current_price = cursor.fetchone()[0]
                 if current_price != float(LainPlush['currentPrice']):
                     print(f' [-] Price changed for {item.title} from {current_price} to {LainPlush["currentPrice"]}')
-                    # update db
                     cursor.execute(f'UPDATE LainPlush SET currentPrice = {LainPlush["currentPrice"]} WHERE id = {item.itemId}')
         except Exception as e:
             print(f' [!] Error: {e}')
@@ -111,13 +98,27 @@ def update_data():
     print(f' [+] Added {new_listings} new listings') if new_listings > 0 else print(' [+] No new listings')
 
 
+def get_active_plushes(payload):
+    '''
+    Queries the ebay Finding API for any active lain plush
+    listings. Note that the response can contain false positives,
+    which are handled in update_data.
+    '''
+    try:
+        api = Finding(appid=APPLICATION_ID, config_file=None)
+        response = api.execute('findItemsAdvanced', payload)
+        return response
+    except ConnectionError as e:
+        print(e)
+        print(e.response.dict())
+
 def check_expired():
     '''
     Checks if any listings have expired and marks
     them as inactive.
     '''
     edited_listings = 0
-    # Get all active listings
+    
     cursor = connection.cursor()
     cursor.execute('SELECT * FROM LainPlush WHERE active = True')
     active_listings = cursor.fetchall()
@@ -133,9 +134,6 @@ def check_expired():
     connection.commit()
     print(f' [+] Updated {edited_listings} listings') if edited_listings > 0 else print(' [+] No active listings have ended')
 
-
-if __name__ == '__main__':
-    print('Updating data at', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+def lambda_handler():
     update_data()
-    print('Checking for expired listings at', datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     check_expired()

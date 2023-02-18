@@ -9,6 +9,18 @@ import boto3
 import requests
 import MySQLdb
 
+
+# create log file for cron job
+# named after the current date and time
+# for logging purposes
+
+now = datetime.datetime.now()
+# create log directory for the day if it doesn't exist
+if not os.path.exists(f'logs/{now.month}-{now.day}-{now.year}'):
+    os.makedirs(f'logs/{now.month}-{now.day}-{now.year}')
+log_file = f'logs/{now.month}-{now.day}-{now.year}/{now.hour}-{now.minute}-{now.second}.log'
+f = open(log_file, 'w')
+
 # load environment variables
 load_dotenv()
 
@@ -37,6 +49,7 @@ def update_data():
     to the database. Update any existing listings in case of
     price changes (auctions). Upload listing cover image to S3.
     '''
+    global f
 
     new_listings = 0
     response = get_active_plushes(PAYLOAD)
@@ -59,12 +72,12 @@ def update_data():
             cursor = connection.cursor()
             cursor.execute(f'SELECT * FROM LainPlush WHERE id = {item.itemId}')
             if cursor.fetchone() is None:
-                print(f' [+] Adding {item.title} to db')
+                f.write(f' [+] Adding new listing: {LainPlush["title"]}\n')
                 
                 # download ebay thumbnail
                 img = requests.get(LainPlush['image']).content
-                with open(f'{item.itemId}.jpg', 'wb') as f:
-                    f.write(img)
+                with open(f'{item.itemId}.jpg', 'wb') as c:
+                    c.write(img)
 
                 # upload to s3 using boto3 with credentials in .env
                 boto = boto3.Session(
@@ -74,7 +87,7 @@ def update_data():
                 s3 = boto.resource('s3')
                 bucket = s3.Bucket(AWS_BUCKET)
                 bucket.upload_file(f'{item.itemId}.jpg', f'{item.itemId}.jpg', ExtraArgs={ "ContentType": "image/jpeg"})
-                print(f' [+] Uploaded {item.itemId}.jpg to s3')
+                f.write(f' [+] Uploaded {item.itemId}.jpg to S3\n')
 
                 # add s3 url as image url for listing
                 LainPlush['image'] = f'https://{AWS_BUCKET}.s3.amazonaws.com/{item.itemId}.jpg'
@@ -89,13 +102,13 @@ def update_data():
                 cursor.execute(f'SELECT currentPrice FROM LainPlush WHERE id = {item.itemId}')
                 current_price = cursor.fetchone()[0]
                 if current_price != float(LainPlush['currentPrice']):
-                    print(f' [-] Price changed for {item.title} from {current_price} to {LainPlush["currentPrice"]}')
+                    f.write(f' [+] Price changed for {LainPlush["title"]}: {current_price} -> {LainPlush["currentPrice"]}\n')
                     cursor.execute(f'UPDATE LainPlush SET currentPrice = {LainPlush["currentPrice"]} WHERE id = {item.itemId}')
         except Exception as e:
-            print(f' [!] Error: {e}')
+            f.write(f' [-] Error: {e}\n')
             continue
     connection.commit()
-    print(f' [+] Added {new_listings} new listings') if new_listings > 0 else print(' [+] No new listings')
+    f.write(f' [+] Added {new_listings} new listings\n') if new_listings > 0 else f.write(' [+] No new listings\n')
 
 
 def get_active_plushes(payload):
@@ -104,36 +117,43 @@ def get_active_plushes(payload):
     listings. Note that the response can contain false positives,
     which are handled in update_data.
     '''
+    global f
+
     try:
         api = Finding(appid=APPLICATION_ID, config_file=None)
         response = api.execute('findItemsAdvanced', payload)
         return response
     except ConnectionError as e:
-        print(e)
-        print(e.response.dict())
+        f.write(f' [-] Error: {e}\n')
+        f.write(f' [-] Response: {e.response.dict()}\n')
 
 def check_expired():
     '''
     Checks if any listings have expired and marks
     them as inactive.
     '''
+    global f
     edited_listings = 0
     
     cursor = connection.cursor()
     cursor.execute('SELECT * FROM LainPlush WHERE active = True')
     active_listings = cursor.fetchall()
-    print(f' [+] Checking {len(active_listings)} active listings')
+    f.write(f' [+] Checking {len(active_listings)} active listings\n')
 
     # Check if any active listings have expired
     for row in active_listings:
         # See if listing's end time has already passed
         if row[3] < calendar.timegm(datetime.datetime.utcnow().timetuple()):
-            print(f' [-] Listing {row[2]} has ended')
-            cursor.execute(f'UPDATE LainPlush SET active = False WHERE id = {row[0]}')
+            f.write(f' [+] Listing {row[2]} has ended\n')
+            cursor.execute(f'UPDATE LainPlush SET active = False WHERE id = {row[0]}\n')
             edited_listings += 1
     connection.commit()
-    print(f' [+] Updated {edited_listings} listings') if edited_listings > 0 else print(' [+] No active listings have ended')
+    f.write(f' [+] Marked {edited_listings} listings as inactive\n') if edited_listings > 0 else f.write(' [+] No listings marked as inactive\n')
 
-def lambda_handler():
-    update_data()
-    check_expired()
+
+f.write('Updating listings at {}\n'.format(datetime.datetime.now()))
+update_data()
+f.write('Checking for expired listings at {}\n'.format(datetime.datetime.now()))
+check_expired()
+
+f.close()

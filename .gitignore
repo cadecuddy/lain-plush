@@ -24,6 +24,7 @@ next-env.d.ts
 # misc
 .DS_Store
 *.pem
+*.crt
 
 # debug
 npm-debug.log*
@@ -45,6 +46,7 @@ yarn-error.log*
 # venv
 scripts/venv
 scripts/*.zip
+scripts/deploy/
 
 # dev db files
 *.sqlite

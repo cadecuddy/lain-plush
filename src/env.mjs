@@ -8,9 +8,6 @@ import { z } from "zod";
 const server = z.object({
   DATABASE_URL: z.string().url(),
   NODE_ENV: z.enum(["development", "test", "production"]),
-  EBAY_APP_ID: z.string(),
-  EBAY_CERT_ID: z.string(),
-  EBAY_DEV_ID: z.string(),
 });
 
 /**
@@ -30,9 +27,6 @@ const client = z.object({
 const processEnv = {
   DATABASE_URL: process.env.DATABASE_URL,
   NODE_ENV: process.env.NODE_ENV,
-  EBAY_APP_ID: process.env.EBAY_APP_ID,
-  EBAY_CERT_ID: process.env.EBAY_CERT_ID,
-  EBAY_DEV_ID: process.env.EBAY_DEV_ID,
   // NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,
 };
 

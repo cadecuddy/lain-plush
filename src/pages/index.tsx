@@ -1,13 +1,13 @@
 import type { LainPlush } from "@prisma/client";
 import type { InferGetStaticPropsType } from "next";
 import { type NextPage } from "next";
-import Head from "next/head";
 import Image from "next/image";
 import { useState } from "react";
 import { createProxySSGHelpers } from "@trpc/react-query/ssg";
 import { listingsRouter } from "../server/api/routers/listings";
 import { prisma } from "../server/db";
 import TabArea from "../components/TabArea";
+import MetaHead from "../components/MetaHead";
 
 const Home: NextPage<InferGetStaticPropsType<typeof getStaticProps>> = ({
   data,
@@ -52,31 +52,7 @@ const Home: NextPage<InferGetStaticPropsType<typeof getStaticProps>> = ({
 
   return (
     <>
-      <Head>
-        <title>lain plush</title>
-        <meta
-          name="description"
-          content="home of the lain plush economic hub."
-        />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link
-          rel="apple-touch-icon"
-          sizes="180x180"
-          href="/icons/apple-touch-icon.png"
-        />
-        <link
-          rel="icon"
-          type="image/png"
-          sizes="32x32"
-          href="/icons/favicon-32x32.png"
-        />
-        <link
-          rel="icon"
-          type="image/png"
-          sizes="16x16"
-          href="/icons/favicon-16x16.png"
-        />
-      </Head>
+      <MetaHead />
 
       <main className="flex-col text-neutral-300 md:flex md:flex-row">
         <div className="w-full p-4 md:w-1/2">
